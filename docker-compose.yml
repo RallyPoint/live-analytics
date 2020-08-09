@@ -1,0 +1,9 @@
+version: '2'
+services:
+  node_app:
+    build: .
+    command: ./ci/run-dev.sh
+    volumes:
+      - .:/usr/app/
+    ports:
+      - "3000:3000"
