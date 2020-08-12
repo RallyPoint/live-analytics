@@ -1,18 +1,21 @@
 import * as express from "express";
+import * as bodyParser from "body-parser";
 import * as cors from "cors";
 import * as Mysql from "promise-mysql";
 import * as config from 'config';
 
 const app = express();
+app.use(bodyParser.json());
+
 var allowedOrigins = ['http://localhost:4200',
     'http://127.0.0.1:4200',
     'https://rallypoint.tech'];
 
 const MAX_VIWER_BY_IP = 5;
-const TASK_INTERVAL = 10000;
+const TASK_INTERVAL = 5000;
 const port = 3000;
 
-const stats: {[index:string] : {viwer:{[index:string]:number}, total: number, task: number}} = {};
+const stats: {[index:string] : {viwer:{[index:string]:{[index:string]:NodeJS.Timeout}}, total: number, task: number}} = {};
 const statsPromise = {};
 let mysqlConnection: Mysql.Connection;
 
@@ -26,7 +29,7 @@ const channelReady = async (channelId) => {
                     total: 0,
                     task : <any>setInterval(() => {
                         stats[channelId].total = Object.keys(stats[channelId].viwer).reduce((acc,ip) => {
-                            return acc + stats[channelId].viwer[ip];
+                            return acc + Object.keys(stats[channelId].viwer[ip]).length;
                         },0);
                         if(stats[channelId].total === 0){
                             clearInterval(stats[channelId].task);
@@ -57,32 +60,39 @@ app.use(cors({
 }));
 
 app.post('/:channel/stats', function (req, res) {
+    console.log(req.body);
     return channelReady(req.params.channel).then(()=>{
         if(stats[req.params.channel].viwer[req.ip] === undefined){
-            stats[req.params.channel].viwer[req.ip] = 0;
+            stats[req.params.channel].viwer[req.ip] = {};
         }else{
-            if(stats[req.params.channel].viwer[req.ip] >= MAX_VIWER_BY_IP){
+            if(Object.keys(stats[req.params.channel].viwer[req.ip]).length >= MAX_VIWER_BY_IP){
                 return res.send({
                     viwer : stats[req.params.channel].total
                 });
             }
         }
-        stats[req.params.channel].viwer[req.ip]++;
-        const delay = Math.round(Math.random()*10000);
-        setTimeout(()=>{
+        const uid = setTimeout(()=>{
             if(!stats[req.params.channel]){return;}
-            if(stats[req.params.channel].viwer[req.ip] <= 1){
+            if(Object.keys(stats[req.params.channel].viwer[req.ip]).length <= 1){
                 delete stats[req.params.channel].viwer[req.ip];
             }else {
-                stats[req.params.channel].viwer[req.ip]--;
+                delete stats[req.params.channel].viwer[req.ip][req.body.uid];
             }
-        },delay+1000);
-
+        },5000);
+        if(req.body.uid && stats[req.params.channel].viwer[req.ip][req.body.uid]){
+            clearTimeout(stats[req.params.channel].viwer[req.ip][req.body.uid]);
+        }else{
+            req.body.uid = Math.round(Math.random()*9999999);
+        }
+        stats[req.params.channel].viwer[req.ip][req.body.uid] = uid;
         return res.send({
-            viwer : stats[req.params.channel].total
+            viwer : stats[req.params.channel].total,
+            uid : req.body.uid
         });
 
-    },()=>{
+
+    },(e)=>{
+        console.log(e);
         res.sendStatus(404);
     }).catch(console.log);
 });
@@ -96,6 +106,21 @@ app.get('/:channel/stats', (req, res) => {
     res.send({
         viwer : stats[req.params.channel].total
     });
+});
+
+app.get('/stats', (req, res) => {
+    if(!req.query['channels'] || !(<string[]>req.query['channels']).length){
+        return res.send([]);
+    }
+    const channels: string[] = <string[]>req.query['channels'];
+    res.send(Object.keys(stats).filter((key)=>{
+        return channels.indexOf(key) != -1;
+    }).map((channel)=>{
+        return {
+            viwer : stats[channel].total,
+            name: channel
+        }
+    }));
 });
 
 console.log(config.get('mysql'));
