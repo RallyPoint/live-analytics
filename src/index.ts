@@ -60,7 +60,7 @@ app.use(cors({
 }));
 
 app.post('/:channel/stats', function (req, res) {
-    console.log(req.body);
+    console.log("DEBUG - GET");
     return channelReady(req.params.channel).then(()=>{
         if(stats[req.params.channel].viwer[req.ip] === undefined){
             stats[req.params.channel].viwer[req.ip] = {};
@@ -109,6 +109,7 @@ app.get('/:channel/stats', (req, res) => {
 });
 
 app.get('/stats', (req, res) => {
+    console.log("DEBUG - GET");
     if(!req.query['channels'] || !(<string[]>req.query['channels']).length){
         return res.send([]);
     }
