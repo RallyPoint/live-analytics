@@ -123,7 +123,6 @@ app.get('/stats', (req, res) => {
     }));
 });
 
-console.log(config.get('mysql'));
 Mysql.createConnection({
     host     : config.get('mysqlSlave.host'),
     user     : config.get('mysqlSlave.username'),
